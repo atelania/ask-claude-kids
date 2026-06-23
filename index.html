@@ -290,6 +290,14 @@ function scrollBottom() {
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
+function speak(text) {
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = 0.9;
+  utter.pitch = 1.1;
+  window.speechSynthesis.speak(utter);
+}
+
 function addBubble(role, text) {
   const div = document.createElement('div');
   if (role === 'user') {
@@ -297,7 +305,7 @@ function addBubble(role, text) {
     div.innerHTML = `<div class="speaker">👦 You</div>${escapeHtml(text)}`;
   } else if (role === 'assistant') {
     div.className = 'bubble claude';
-    div.innerHTML = `<div class="speaker">✨ Claude</div>${escapeHtml(text)}`;
+    div.innerHTML = `<div class="speaker">✨ Claude <button onclick="speak(this.dataset.text)" data-text="${text.replace(/"/g, '&quot;')}" style="background:none;border:none;cursor:pointer;font-size:1rem;margin-left:4px;opacity:0.7;" title="Read aloud">🔊</button></div>${escapeHtml(text)}`;
   } else if (role === 'warning') {
     div.className = 'warning-bubble';
     div.innerHTML = `🚦 Hmm, let's stick to fun questions! Try asking me about animals, space, or how things work. 🌍`;
