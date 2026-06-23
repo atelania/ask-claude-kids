@@ -288,6 +288,7 @@ let history = [];
 let turnCount = 0;
 let loading = false;
 let currentAudio = null;
+let audioContext = null;
 
 const chatEl = document.getElementById('chat');
 const inputEl = document.getElementById('input');
@@ -314,19 +315,28 @@ async function speak(text, btn) {
   btn.textContent = '⏳';
   btn.disabled = true;
   try {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume();
+    }
     const response = await fetch(`${WORKER_URL}/speak`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text })
     });
-    const blob = await response.blob();
-    const audioUrl = URL.createObjectURL(blob);
-    currentAudio = new Audio(audioUrl);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    const source = audioContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioContext.destination);
     btn.textContent = '🔊';
     btn.disabled = false;
-    currentAudio.play();
-    currentAudio.onended = () => { btn.textContent = '🔊'; };
+    source.start(0);
+    source.onended = () => { btn.textContent = '🔊'; };
   } catch(e) {
+    console.log('Audio error:', e);
     btn.textContent = '🔊';
     btn.disabled = false;
   }
@@ -402,6 +412,10 @@ function showResetMessage() {
 async function sendMessage() {
   const text = inputEl.value.trim();
   if (!text || loading) return;
+
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  }
 
   inputEl.value = '';
   inputEl.style.height = 'auto';
