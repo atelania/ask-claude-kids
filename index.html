@@ -115,6 +115,24 @@
     letter-spacing: 0.5px;
     margin-bottom: 4px;
     opacity: 0.65;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .speak-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    opacity: 0.7;
+    padding: 0;
+    line-height: 1;
+  }
+
+  .speak-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
   }
 
   .warning-bubble {
@@ -224,11 +242,6 @@
     color: #7986CB;
     padding: 4px 0 0;
   }
-
-  .stars {
-    font-size: 1.1rem;
-    letter-spacing: 2px;
-  }
 </style>
 </head>
 <body>
@@ -256,6 +269,8 @@
 </div>
 
 <script>
+const WORKER_URL = 'https://ask-claude-kids.atelan.workers.dev';
+
 const SYSTEM_PROMPT = `You are a warm, enthusiastic, and age-appropriate AI assistant for a 7-year-old child. Your name is Claude.
 
 RULES:
@@ -272,6 +287,7 @@ const MAX_TURNS = 10;
 let history = [];
 let turnCount = 0;
 let loading = false;
+let currentAudio = null;
 
 const chatEl = document.getElementById('chat');
 const inputEl = document.getElementById('input');
@@ -290,12 +306,30 @@ function scrollBottom() {
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
-function speak(text) {
-  window.speechSynthesis.cancel();
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.rate = 0.9;
-  utter.pitch = 1.1;
-  window.speechSynthesis.speak(utter);
+async function speak(text, btn) {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
+  }
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  try {
+    const response = await fetch(`${WORKER_URL}/speak`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    const blob = await response.blob();
+    const audioUrl = URL.createObjectURL(blob);
+    currentAudio = new Audio(audioUrl);
+    btn.textContent = '🔊';
+    btn.disabled = false;
+    currentAudio.play();
+    currentAudio.onended = () => { btn.textContent = '🔊'; };
+  } catch(e) {
+    btn.textContent = '🔊';
+    btn.disabled = false;
+  }
 }
 
 function addBubble(role, text) {
@@ -305,7 +339,19 @@ function addBubble(role, text) {
     div.innerHTML = `<div class="speaker">👦 You</div>${escapeHtml(text)}`;
   } else if (role === 'assistant') {
     div.className = 'bubble claude';
-    div.innerHTML = `<div class="speaker">✨ Claude <button onclick="speak(this.dataset.text)" data-text="${text.replace(/"/g, '&quot;')}" style="background:none;border:none;cursor:pointer;font-size:1rem;margin-left:4px;opacity:0.7;" title="Read aloud">🔊</button></div>${escapeHtml(text)}`;
+    const speakerDiv = document.createElement('div');
+    speakerDiv.className = 'speaker';
+    speakerDiv.innerHTML = '✨ Claude ';
+    const btn = document.createElement('button');
+    btn.className = 'speak-btn';
+    btn.textContent = '🔊';
+    btn.title = 'Read aloud';
+    btn.onclick = () => speak(text, btn);
+    speakerDiv.appendChild(btn);
+    div.appendChild(speakerDiv);
+    const textDiv = document.createElement('div');
+    textDiv.innerHTML = escapeHtml(text);
+    div.appendChild(textDiv);
   } else if (role === 'warning') {
     div.className = 'warning-bubble';
     div.innerHTML = `🚦 Hmm, let's stick to fun questions! Try asking me about animals, space, or how things work. 🌍`;
@@ -369,7 +415,7 @@ async function sendMessage() {
   showTyping();
 
   try {
-    const response = await fetch('https://ask-claude-kids.atelan.workers.dev', {
+    const response = await fetch(WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
